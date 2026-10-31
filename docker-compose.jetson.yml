@@ -1,0 +1,26 @@
+# Override para la Jetson Orin Nano (requiere nvidia-container-toolkit, incluido en JetPack)
+services:
+  backend:
+    runtime: nvidia
+    privileged: true            # acceso a /dev (serial, I2C, GPIO, cámaras)
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+    volumes:
+      - /dev:/dev
+    command: >
+      bash -c "source /opt/ros/humble/setup.bash &&
+      exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        # Cambiar por la IP de la Jetson en la red del rover
+        VITE_API_URL: ${VITE_API_URL:-http://jetson.local:8000}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://jetson.local:8000}
+    ports: !override
+      - "80:80"
+    volumes: !reset []
+    restart: unless-stopped

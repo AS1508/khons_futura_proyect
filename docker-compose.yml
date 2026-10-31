@@ -1,0 +1,47 @@
+# Uso:
+#   Desarrollo (PC):      docker compose up --build
+#   Con simulación:       docker compose --profile sim up --build
+#   Producción (Jetson):  docker compose -f docker-compose.yml -f docker-compose.jetson.yml up -d --build
+services:
+  backend:
+    build: ./backend
+    # host: necesario para que el descubrimiento DDS de ROS 2 funcione con el rover y otros nodos
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    volumes:
+      - ./backend/app:/app/app
+    command: >
+      bash -c "source /opt/ros/humble/setup.bash &&
+      exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  simulation:
+    build: ./simulation
+    profiles: ["sim"]
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      DISPLAY: ${DISPLAY:-}
+      QT_X11_NO_MITSHM: "1"
+    volumes:
+      - ./simulation:/ws/src
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    tty: true
+    stdin_open: true
